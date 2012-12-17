@@ -11,7 +11,6 @@
 #import "NTSynchronousTask.h"
 #import "SULog.h"
 #import <CoreServices/CoreServices.h>
-#import "SUPasswordPrompt.h"
 
 @implementation SUDiskImageUnarchiver
 
@@ -20,11 +19,28 @@
 	return [[path pathExtension] isEqualToString:@"dmg"];
 }
 
+// Called on a non-main thread.
 - (void)extractDMG
-{		
-	// GETS CALLED ON NON-MAIN THREAD!!!
+{
 	
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    
+    NSData *result = [NTSynchronousTask task:@"/usr/bin/hdiutil" directory:@"/" withArgs:[NSArray arrayWithObjects: @"isencrypted", archivePath, nil] input:NULL];
+	if([self isEncrypted:result] && [delegate respondsToSelector:@selector(unarchiver:requiresPasswordReturnedViaInvocation:)]) {
+        [self performSelectorOnMainThread:@selector(requestPasswordFromDelegate) withObject:nil waitUntilDone:NO];
+    } else {
+        [self extractDMGWithPassword:nil];
+    }
+    
+    [pool release];
+}
+
+// Called on a non-main thread.
+- (void)extractDMGWithPassword:(NSString *)password
+{
+    
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    
 	BOOL mountedSuccessfully = NO;
 	
 	SULog(@"Extracting %@ as a DMG", archivePath);
@@ -49,37 +65,18 @@
 	}
 	while (noErr == FSPathMakeRefWithOptions((UInt8 *)[mountPoint fileSystemRepresentation], kFSPathMakeRefDoNotFollowLeafSymlink, &tmpRef, NULL));
 
-	BOOL isEncrypted = NO;
-	NSData *result = [NTSynchronousTask task:@"/usr/bin/hdiutil" directory:@"/" withArgs:[NSArray arrayWithObjects: @"isencrypted", archivePath, nil] input:NULL];
-	if([self isEncrypted:result])
-		isEncrypted = YES;
-	
-	NSArray* arguments = [NSArray arrayWithObjects:@"attach", archivePath, @"-mountpoint", mountPoint, /*@"-noverify",*/ @"-nobrowse", @"-noautoopen", nil];
-	// set up a pipe and push "yes" (y works too), this will accept any license agreement crap
-	// not every .dmg needs this, but this will make sure it works with everyone
-
-	NSData* promptData;
-	if(isEncrypted) {
-		SUPasswordPrompt *prompt = [[SUPasswordPrompt alloc] initWithHost:(SUHost*)[delegate host]];
-		if([prompt run]) 
-		{
-			NSString *password = [prompt password];
-			if(![password length])
-				goto reportError;
-			NSString *data = [NSString stringWithFormat:@"%@\nyes\n", password];
-			const char *bytes = [data cStringUsingEncoding:NSUTF8StringEncoding];
-			NSUInteger length = [data lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
-			promptData = [NSData dataWithBytes:bytes length:length];
-		}
-		else 
-		{
-			goto reportError;
-		}
-		[prompt release];
+    NSData *promptData = nil;
+    if (password) {
+        NSString *data = [NSString stringWithFormat:@"%@\nyes\n", password];
+        const char *bytes = [data cStringUsingEncoding:NSUTF8StringEncoding];
+        NSUInteger length = [data lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+        promptData = [NSData dataWithBytes:bytes length:length];
 	}
 	else
 		promptData = [NSData dataWithBytes:"yes\n" length:4];
 	
+    NSArray* arguments = [NSArray arrayWithObjects:@"attach", archivePath, @"-mountpoint", mountPoint, /*@"-noverify",*/ @"-nobrowse", @"-noautoopen", nil];
+    
     NSData *output = nil;
 	NSInteger taskResult = -1;
 	@try
@@ -92,7 +89,7 @@
 		output = [[[task output] copy] autorelease];
         [task release];
 	}
-	@catch (NSException *localException) 
+	@catch (NSException *localException)
 	{ 
 		goto reportError;
 	}
@@ -100,14 +97,19 @@
 	if (taskResult != 0)
 	{
 		NSString*	resultStr = output ? [[[NSString alloc] initWithData: output encoding: NSUTF8StringEncoding] autorelease] : nil;
-		SULog( @"hdiutil failed with code: %d data: <<%@>>", taskResult, resultStr );
-		goto reportError;
+        if (password != nil && [resultStr rangeOfString:@"Authentication error"].location != NSNotFound && [delegate respondsToSelector:@selector(unarchiver:requiresPasswordReturnedViaInvocation:)]) {
+            [self performSelectorOnMainThread:@selector(requestPasswordFromDelegate) withObject:nil waitUntilDone:NO];
+            goto finally;
+        } else {
+            SULog( @"hdiutil failed with code: %d data: <<%@>>", taskResult, resultStr );
+            goto reportError;
+        }
 	}
 	mountedSuccessfully = YES;
 	
 	// Now that we've mounted it, we need to copy out its contents.
-	if (floor(NSAppKitVersionNumber) > NSAppKitVersionNumber10_5) {
-		// On 10.6 and later we don't want to use the File Manager API and instead want to use NSFileManager (fixes #827357).
+	if (floor(NSAppKitVersionNumber) > NSAppKitVersionNumber10_6) {
+		// On 10.7 and later we don't want to use the File Manager API and instead want to use NSFileManager (fixes #827357).
 		NSFileManager *manager = [[[NSFileManager alloc] init] autorelease];
         NSError *error = nil;
         NSArray *contents = [manager contentsOfDirectoryAtPath:mountPoint error:&error];
@@ -132,7 +134,7 @@
             
             if (![manager copyItemAtPath:fromPath toPath:toPath error:&error])
             {
-                SULog(@"Couldn't copy item: %@", error);
+                SULog(@"Couldn't copy item: %@ : %@", error, error.userInfo ? error.userInfo : @"");
                 goto reportError;
             }
         }
@@ -185,6 +187,20 @@ finally:
 		}
 	}
 	return result;
+}
+
+- (void)requestPasswordFromDelegate
+{
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:[self methodSignatureForSelector:@selector(continueWithPassword:)]];
+    [invocation setSelector:@selector(continueWithPassword:)];
+    [invocation setTarget:self];
+    [invocation retainArguments];
+    [delegate unarchiver:self requiresPasswordReturnedViaInvocation:invocation];
+}
+
+- (void)continueWithPassword:(NSString *)password
+{
+    [NSThread detachNewThreadSelector:@selector(extractDMGWithPassword:) toTarget:self withObject:password];
 }
 
 @end
