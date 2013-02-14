@@ -133,6 +133,7 @@
 		932D49AC168B49D300B8A913 /* SUPasswordPrompt.xib in Resources */ = {isa = PBXBuildFile; fileRef = 93FB277D156BD826001937C7 /* SUPasswordPrompt.xib */; };
 		932D49AD168B49E700B8A913 /* Sparkle.strings in Resources */ = {isa = PBXBuildFile; fileRef = 61AAE8220A321A7F00D8810D /* Sparkle.strings */; };
 		932D49AE168B49F200B8A913 /* SUModelTranslation.plist in Resources */ = {isa = PBXBuildFile; fileRef = 615AE3CF0D64DC40001CA7BD /* SUModelTranslation.plist */; };
+		932D49C2168C1C5B00B8A913 /* finish_installation.app in Resources */ = {isa = PBXBuildFile; fileRef = 55C14BB7136EEF1500649790 /* finish_installation.app */; };
 		93FB277A156BD80D001937C7 /* SUPasswordPrompt.h in Headers */ = {isa = PBXBuildFile; fileRef = 93FB2778156BD80D001937C7 /* SUPasswordPrompt.h */; };
 		93FB277B156BD80D001937C7 /* SUPasswordPrompt.m in Sources */ = {isa = PBXBuildFile; fileRef = 93FB2779156BD80D001937C7 /* SUPasswordPrompt.m */; };
 /* End PBXBuildFile section */
@@ -158,6 +159,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 8DC2EF4F0486A6940098B216;
 			remoteInfo = Sparkle;
+		};
+		932D49C4168C1C6700B8A913 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0867D690FE84028FC02AAC07 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 55C14BB6136EEF1500649790;
+			remoteInfo = finish_installation;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -886,6 +894,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				932D49C5168C1C6700B8A913 /* PBXTargetDependency */,
 			);
 			name = Sparkle;
 			productInstallPath = "$(HOME)/Library/Frameworks";
@@ -993,6 +1002,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				932D49C2168C1C5B00B8A913 /* finish_installation.app in Resources */,
 				932D49A7168B49AB00B8A913 /* License.txt in Resources */,
 				932D49A8168B49C000B8A913 /* SUUpdatePermissionPrompt.xib in Resources */,
 				932D49A9168B49C300B8A913 /* SUUpdateAlert.xib in Resources */,
@@ -1188,6 +1198,11 @@
 			isa = PBXTargetDependency;
 			target = 8DC2EF4F0486A6940098B216 /* Sparkle */;
 			targetProxy = 61FA528C0E2D9EB200EF58AD /* PBXContainerItemProxy */;
+		};
+		932D49C5168C1C6700B8A913 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 55C14BB6136EEF1500649790 /* finish_installation */;
+			targetProxy = 932D49C4168C1C6700B8A913 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
